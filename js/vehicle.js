@@ -68,7 +68,9 @@ export class Vehicle {
       let F = 0;
       if (this.started && this.shiftT <= 0 && !this.cut) {
         F = this.throttle * v.peakKw * 1000 * this.powerFrac(this.rpm) / Math.max(this.speed, 4);
-        F = Math.min(F, v.mass * G * 1.05);
+        F = Math.min(F, v.mass * G * (v.grip ?? 1.05));   // межа зчеплення шин (у g)
+        // електронне обмеження максимальної швидкості (якщо задано в профілі)
+        if (v.maxKmh && this.speed * 3.6 >= v.maxKmh) F = Math.min(F, this.resist(this.speed));
       }
       let res = this.resist(this.speed) + inp.brake * v.mass * 9;
       if (this.running && this.throttle < 0.05 && this.speed > 1) res += v.mass * (this.rpm / e.limiter) * 1.0;

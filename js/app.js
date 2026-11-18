@@ -10,7 +10,8 @@ const store = {
 };
 
 const state = {
-  carIdx: Math.min(store.get('car', 0), CARS.length - 1),
+  // вибрана машина зберігається за id (не за номером у списку — список може змінюватись)
+  carIdx: Math.max(0, CARS.findIndex((c) => c.id === store.get('carId', ''))),
   mode: store.get('mode', 'test'),
   volume: store.get('vol', 80) / 100,
   crackle: store.get('crk', 100) / 100,
@@ -122,7 +123,7 @@ function renderCars() {
   });
 }
 function selectCar(i) {
-  state.carIdx = i; store.set('car', i);
+  state.carIdx = i; store.set('carId', CARS[i].id);
   vehicle.setCar(CARS[i]);
   sendCar();
   renderCars();
