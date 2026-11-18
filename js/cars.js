@@ -60,6 +60,7 @@ export const CARS = [
       dry: 0.5, muffler: 1800, intake: 0.25, intakeF: 700,
       rasp: 0.35, lope: 0.6, crackle: 0.25, whine: 0, whineRatio: 0,
       overrunStrength: 0.75, idleStrength: 0.48,
+      jitterMs: 0.8,   // V8 Muscle: помітніший розкид моменту спалахів (за заміром teslasound)
       pulseWidth: 0.5, drive: 1.6, gain: 0.55,
     },
     vehicle: {
@@ -80,6 +81,7 @@ export const CARS = [
       dry: 0.5, muffler: 2400, intake: 1.0, intakeF: 2500,
       rasp: 0.45, lope: 0.35, crackle: 0.25, whine: 0.6, whineRatio: 25,
       idleStrength: 0.7, overrunStrength: 0.75, crankStrength: 1.3, lowCut: 160,
+      jitterMs: 0.8,
       pulseWidth: 0.5, drive: 1.8, gain: 0.5,
     },
     vehicle: {
@@ -100,6 +102,7 @@ export const CARS = [
       dry: 0.45, muffler: 4500, intake: 0.5, intakeF: 1500,
       rasp: 0.45, lope: 0.12, crackle: 0.4, whine: 0, whineRatio: 0,
       idleStrength: 0.75, crankStrength: 2.0, lowCut: 70,
+      idleUneven: 10,   // GT3: відхилення між циліндрами малі, тож на холостих підсилюємо сильніше
       pulseWidth: 0.45, drive: 1.7, gain: 0.55,
     },
     vehicle: {
@@ -139,6 +142,7 @@ export const CARS = [
       dry: 0.45, muffler: 6500, intake: 0.6, intakeF: 1800,
       rasp: 0.3, lope: 0, crackle: 1.0, whine: 0, whineRatio: 0,
       idleStrength: 0.5, overrunStrength: 0.25, crankStrength: 0.9, lowCut: 100,
+      idleUneven: 3, jitterMs: 0.15,   // V12: рівніший спалах, інакше скидання «гуляє» забагато
       pulseWidth: 0.45, drive: 1.6, gain: 0.65,
     },
     vehicle: {

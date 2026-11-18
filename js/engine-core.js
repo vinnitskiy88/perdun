@@ -105,18 +105,20 @@ class Bank {
     this.p = [];
     for (let i = 0; i < size; i++) this.p.push({ on: false, t: 0, dur: 1, amp: 0, ne: 0, dec: 0 });
   }
-  fire(dur, amp, nAmp, decay) {
+  // delay — затримка початку імпульсу в секундах (розкид моменту спалаху)
+  fire(dur, amp, nAmp, decay, delay = 0) {
     let slot = this.p[0];
     for (const q of this.p) {
       if (!q.on) { slot = q; break; }
       if (q.t > slot.t) slot = q;
     }
-    slot.on = true; slot.t = 0; slot.dur = dur; slot.amp = amp; slot.ne = nAmp; slot.dec = decay;
+    slot.on = true; slot.t = -delay; slot.dur = dur; slot.amp = amp; slot.ne = nAmp; slot.dec = decay;
   }
   run(dt) {
     let s = 0;
     for (const q of this.p) {
       if (!q.on) continue;
+      if (q.t < 0) { q.t += dt; continue; }   // спалах ще не почався
       const u = q.t / q.dur;
       if (u < 1) { const sv = Math.sin(Math.PI * u); s += q.amp * sv * sv; }
       s += q.ne * gauss();
@@ -220,6 +222,9 @@ export class EngineSynth {
     this.bassLP = [new Biquad(), new Biquad()];
     this.bassHP = [new Biquad(), new Biquad()];
     this.bassW = 0;
+    // «Живість»: повільне плавання обертів (~0.8 Гц) і швидші коливання (~7 Гц),
+    // нормовані випадкові процеси з одиничним розкидом
+    this.wS = 0; this.wM = 0; this.rpmMul = 1;
     this.crank = 0;
     this.crackleUser = 1;
     this.e = null;
@@ -228,7 +233,12 @@ export class EngineSynth {
   setCar(e) {
     // Значення за замовчуванням для полів, яких може не бути в профілі
     e = Object.assign({ idleStrength: 0.35, overrunStrength: 0.6, crankStrength: 1.1, lowCut: 130,
-      popGain: 1, burble: 0, burbleBass: 0, lowCut2: 0 }, e);
+      popGain: 1, burble: 0, burbleBass: 0, lowCut2: 0,
+      // живість (за заміром teslasound): плавання холостих, дрібне плавання під навантаженням,
+      // розкид моменту спалаху (мс), «бульбашкове» коливання сили на скиданні
+      wander: 0.025, wanderLoad: 0.006, jitterMs: 0.3, coastWobble: 0.2,
+      // на холостих різниця між циліндрами помітніша (рваний «бульк»): множник відхилень сили
+      idleUneven: 3 }, e);
     this.e = e;
     for (const f of this.lowCut) f.highpass(e.lowCut, 0.7, this.sr);
     if (e.lowCut2 > 0) for (const f of this.lowCut2) f.highpass(e.lowCut2, 0.7, this.sr);
@@ -254,6 +264,8 @@ export class EngineSynth {
     // Гальмування двигуном: плавний перехід до власної сили (у V8 — гучне «бурчання»,
     // у V12 — тихіше за холостий)
     strength += (e.overrunStrength - strength) * overrun;
+    // на скиданні сила «булькає» в такт повільному випадковому коливанню
+    if (overrun > 0.05) strength *= Math.max(0.15, 1 + e.coastWobble * overrun * this.wM);
     if (this.crank > 0.5) strength = e.crankStrength;   // такти під стартером добре чутно
     let jit = 1 + (rand() - 0.5) * 2 * (0.05 + e.lope * 0.35 * idleF);
     // «Бурчання» на скиданні (AMG-стиль): рвані, нерівні спалахи, частина майже пропадає
@@ -262,9 +274,12 @@ export class EngineSynth {
       if (rand() < 0.15 * e.burble * overrun) jit *= 0.2;
     }
     if (rand() < e.lope * 0.05 * idleF * this.crackleUser) jit *= 0.35; // «рваний» холостий хід
-    const amp = strength * c.gain * jit;
+    // стабільна різниця між циліндрами; на холостих посилена — так звучить «рваний» холостий
+    const g = 1 + (c.gain - 1) * (1 + e.idleUneven * idleF);
+    const amp = strength * Math.max(0.05, g) * jit;
     const nAmp = amp * e.rasp * (0.15 + 0.85 * load);   // на малому газу майже без шипіння
-    this.banks[c.bank].fire(dur, amp, nAmp, Math.exp(-this.dt / 0.0012));
+    // момент спалаху «гуляє» на частки мілісекунди — без цього звук надто ідеальний, «синтетичний»
+    this.banks[c.bank].fire(dur, amp, nAmp, Math.exp(-this.dt / 0.0012), rand() * e.jitterMs * 0.001);
 
     // Постріли: потрібне незгоріле паливо в гарячому вихлопі.
     // Між пострілами завжди є пауза; серія — 1–4 «бахи» через 50–170 мс,
@@ -322,6 +337,14 @@ export class EngineSynth {
     this.bassW += (bassTarget - this.bassW) * (1 - Math.exp(-blockT / 0.15));
     const bw = this.bassW;
 
+    // Плавання обертів: повільне (холості «гуляють») і швидше дрібне під навантаженням
+    const kS = 1 - Math.exp(-blockT * TAU * 0.8), kM = 1 - Math.exp(-blockT * TAU * 7);
+    this.wS += kS * (gauss() * Math.sqrt((2 - kS) / kS) * 1.73 - this.wS);
+    this.wM += kM * (gauss() * Math.sqrt((2 - kM) / kM) * 1.73 - this.wM);
+    const idleW = clamp(1 - (this.rpmS - e.idle) / 800, 0, 1) * (1 - 0.6 * this.loadS);
+    const depth = e.wanderLoad + (e.wander - e.wanderLoad) * idleW;
+    this.rpmMul = 1 + depth * (0.8 * this.wS + 0.4 * this.wM);
+
     for (let i = 0; i < n; i++) {
       this.rpmS += (rpmT - this.rpmS) * kR;
       this.loadS += (loadT - this.loadS) * kL;
@@ -329,7 +352,7 @@ export class EngineSynth {
 
       // Колінвал і спалахи
       const prev = this.phase;
-      this.phase += (this.rpmS / 120) * dt;
+      this.phase += (this.rpmS * this.rpmMul / 120) * dt;
       const wrapped = this.phase >= 1;
       if (wrapped) this.phase -= 1;
       if (this.rpmS > 60) {

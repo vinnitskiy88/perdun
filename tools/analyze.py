@@ -259,5 +259,65 @@ def cmd_pops():
                   f'тональний пік {pk:+.0f} дБ, смуги 63..8k: ' + ' '.join(f'{v:+.0f}' for v in bands))
 
 
+def texture(x, sr, tr_t, tr_r, ncyl, a, b):
+    """Ознаки «живості» звуку на відрізку [a,b] (с від кліку):
+    harm  — частка енергії 60–4000 Гц точно на порядках двигуна (більше = чистіший тон, «синтетичніше»);
+    sharp — гострота піку порядку 4: енергія ±1 біна проти ±2…6 бінів, дБ (більше = ідеальніша періодичність);
+    flat  — спектральна площинність 2–8 кГц (1 = шум, 0 = тони/артефакти);
+    am    — живі коливання гучності: розкид RMS по 10 мс у межах 0.5 с, % (після прибирання тренду)."""
+    nfft = 8192; win = np.hanning(nfft); df = sr / nfft
+    f = np.fft.rfftfreq(nfft, 1 / sr)
+    band = (f >= 60) & (f <= 4000)
+    hs, sh, fl = [], [], []
+    for tt in np.arange(a + 0.1, b - 0.1, 0.1):
+        c = int(tt * sr)
+        fr = x[c - nfft // 2:c + nfft // 2]
+        if len(fr) != nfft:
+            continue
+        P = np.abs(np.fft.rfft(fr * win)) ** 2
+        rpm = float(np.interp(tt, tr_t, tr_r))
+        f0 = rpm / 60 * 0.5                         # крок напівпорядку
+        mask = np.zeros_like(P, dtype=bool)
+        k = 1
+        while k * f0 < 4000:
+            bi = int(round(k * f0 / df))
+            mask[max(0, bi - 1):bi + 2] = True
+            k += 1
+        hs.append(P[mask & band].sum() / P[band].sum())
+        b4 = int(round(rpm / 60 * ncyl / 2 / df))
+        core = P[b4 - 1:b4 + 2].sum()
+        ring = P[b4 - 6:b4 - 1].sum() + P[b4 + 2:b4 + 7].sum()
+        sh.append(10 * np.log10(core / (ring + 1e-12)))
+        hb = (f >= 2000) & (f <= 8000)
+        fl.append(float(np.exp(np.mean(np.log(P[hb] + 1e-15))) / np.mean(P[hb])))
+    # коливання гучності
+    s = x[int(a * sr):int(b * sr)]
+    blk = sr // 100
+    e = np.array([np.sqrt(np.mean(s[i:i + blk] ** 2)) for i in range(0, len(s) - blk, blk)])
+    am = []
+    for i in range(0, len(e) - 50, 50):
+        w = e[i:i + 50]
+        tr = np.polyval(np.polyfit(np.arange(50), w, 1), np.arange(50))
+        am.append(np.std(w - tr) / (np.mean(w) + 1e-9) * 100)
+    return np.mean(hs) * 100, np.mean(sh), np.mean(fl), np.mean(am)
+
+
+def cmd_texture():
+    print('ознаки: harm% (тон на порядках) | sharp дБ (ідеальність періоду) | flat 2–8к | am% (живі коливання)')
+    for car, c in CARS.items():
+        tr = json.load(open(os.path.join(OUT, car + '.track.json')))
+        tt, rr = np.array(tr['t']), np.array(tr['rpm'])
+        print(f'\n== {car} ==')
+        for tag, path, t0 in (('teslasound', os.path.join(REF, car + '.wav'), tr['click']),
+                              ('Пердун    ', os.path.join(OUT, car + '-perdun.wav'), 0.0)):
+            sr, x, _ = load(path)
+            x = x[int(t0 * sr):]
+            row = []
+            for name, a, b in (('холостий', 3.0, 4.8), ('газ', 5.5, 12.8), ('скидання', 13.3, 18.8)):
+                h, s_, fl, am = texture(x, sr, tt, rr, c['n'], a, b)
+                row.append(f'{name}: {h:4.0f}% {s_:5.1f} {fl:.2f} {am:4.1f}%')
+            print(f'  {tag}  ' + ' | '.join(row))
+
+
 if __name__ == '__main__':
-    {'track': cmd_track, 'compare': cmd_compare, 'pops': cmd_pops}[sys.argv[1]]()
+    {'track': cmd_track, 'compare': cmd_compare, 'pops': cmd_pops, 'texture': cmd_texture}[sys.argv[1]]()
