@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="uk"><head><meta charset="utf-8"><title>Пердун — офлайн-тест</title>
+<style>body{background:#111;color:#ddd;font:14px monospace;padding:16px}button{margin:2px}</style></head>
+<body>
+<h3>Офлайн-рендер: запуск → холостий → розгін до відсічки → скидання газу</h3>
+<div id="btns"></div><pre id="out">…</pre>
+<script type="module">
+import { CARS } from './js/cars.js';
+import { Vehicle } from './js/vehicle.js';
+
+const SR = 48000, DUR = 14;
+// Сценарій тест-драйву: 0-3 с запуск, 3-4 холостий, 4-11 газ у підлогу, 11-14 скидання
+function scenario(t) { return t > 4 && t < 11 ? { gas: 1, brake: 0 } : { gas: 0, brake: 0 }; }
+
+async function renderCar(car) {
+  const ctx = new OfflineAudioContext(2, SR * DUR, SR);
+  await ctx.audioWorklet.addModule('./js/engine-worklet.js');
+  const node = new AudioWorkletNode(ctx, 'engine-processor', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
+  node.port.postMessage({ type: 'car', engine: car.engine });
+  node.connect(ctx.destination);
+  const v = new Vehicle(car); v.start();
+  const dt = 0.016, trace = [];
+  for (let t = 0; t < DUR; t += dt) {
+    v.update(dt, 'test', scenario(t));
+    for (const k of ['rpm', 'load', 'overrun', 'cut', 'crank']) node.parameters.get(k).setValueAtTime(v[k], t);
+    if (Math.abs(t % 1) < dt) trace.push(`${t.toFixed(0)}s ${Math.round(v.speed * 3.6)}км/г g${v.gear} ${Math.round(v.rpm)}`);
+  }
+  await new Promise(r => setTimeout(r, 50)); // дати повідомленню 'car' дійти
+  const buf = await ctx.startRendering();
+  const L = buf.getChannelData(0), R = buf.getChannelData(1);
+  let peak = 0, nan = 0; const seg = [];
+  for (let s = 0; s < DUR; s++) {
+    let sum = 0;
+    for (let i = s * SR; i < (s + 1) * SR; i++) {
+      const x = L[i], y = R[i];
+      if (!Number.isFinite(x) || !Number.isFinite(y)) { nan++; continue; }
+      peak = Math.max(peak, Math.abs(x), Math.abs(y)); sum += x * x;
+    }
+    seg.push(Math.sqrt(sum / SR).toFixed(3));
+  }
+  return { buf, peak, nan, seg, trace };
+}
+
+const out = document.getElementById('out'), results = {};
+let txt = '';
+for (const car of CARS) {
+  const r = await renderCar(car);
+  results[car.id] = r;
+  txt += `${car.name}: peak=${r.peak.toFixed(3)} NaN=${r.nan}\n  RMS/с: ${r.seg.join(' ')}\n  ${r.trace.join(' | ')}\n\n`;
+  out.textContent = txt;
+  const b = document.createElement('button'); b.textContent = '▶ ' + car.name;
+  b.onclick = () => { const ac = new AudioContext(); const s = ac.createBufferSource(); s.buffer = r.buf; s.connect(ac.destination); s.start(); };
+  document.getElementById('btns').appendChild(b);
+}
+window.__results = Object.fromEntries(Object.entries(results).map(([k, r]) => [k, { peak: r.peak, nan: r.nan, seg: r.seg }]));
+window.__done = true;
+</script>
+</body></html>
