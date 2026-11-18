@@ -34,9 +34,10 @@ export const CARS = [
       pipe: [3.4, 3.9], pipeFb: -0.3, pipeDamp: 0.4,
       formants: [{ f: 140, q: 1.0, g: 0.85 }, { f: 420, q: 1.4, g: 0.3 }],
       dry: 0.5, muffler: 5500, intake: 1.2, intakeF: 3000,
-      rasp: 0.5, lope: 0.25, crackle: 1.0, whine: 0.05, whineRatio: 30,
+      rasp: 0.5, lope: 0.4, crackle: 1.0, whine: 0.05, whineRatio: 30,
       idleStrength: 0.45, overrunStrength: 0.75, lowCut: 150,
       popGain: 1.8, burble: 0.8,
+      burbleBass: 2.5,   // більше басу в бурчанні на холостих і на скиданні (на газу без змін)
       // вузькі, різкі імпульси тиску — більше «хрипу» 1–4 кГц навіть на низьких обертах
       pulseWidth: 0.18, drive: 1.7, gain: 0.55,
     },

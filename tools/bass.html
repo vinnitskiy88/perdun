@@ -12,11 +12,11 @@ const car = CARS.find((c) => c.id === id);
 const SR = 48000, N = 4096;
 const bands = [40, 63, 125, 250, 500, 1000, 2000, 4000];
 
-function spectrum(rpm, load) {
+function spectrum(rpm, load, overrun = 0) {
   const s = new EngineSynth(SR); s.setCar(car.engine);
   const L = new Float32Array(128), R = new Float32Array(128), buf = [];
   for (let b = 0; b < 3 * SR / 128; b++) {
-    s.render(L, R, 128, { rpm, load, overrun: 0, cut: 0, crank: 0 });
+    s.render(L, R, 128, { rpm, load, overrun, cut: 0, crank: 0 });
     // ?ch=L — лише лівий канал (так його чує один динамік), інакше середнє L+R
     const ch = new URLSearchParams(location.search).get('ch');
     if (b > SR / 128) for (let i = 0; i < 128; i++) buf.push(ch === 'L' ? L[i] : (L[i] + R[i]) / 2);
@@ -45,9 +45,11 @@ function spectrum(rpm, load) {
   return { cen: Math.round(num / den), b: e.map((v) => Math.round(100 * v / tot)) };
 }
 
-const idle = spectrum(car.engine.idle, 0.2), gas = spectrum(4500, 1);
+const idle = spectrum(car.engine.idle, 0.2), gas = spectrum(4500, 1), over = spectrum(3000, 0, 1);
 const fmt = (r) => `центр ${r.cen} Гц | частка енергії %: ` + bands.map((f, i) => `${f}:${r.b[i]}`).join(' ');
+const low = (r) => r.b[0] + r.b[1] + r.b[2];
 document.getElementById('out').textContent =
-  `${car.name}\nхолостий: ${fmt(idle)}\nгаз 4500: ${fmt(gas)}\nнизи <180 Гц: холостий ${idle.b[0] + idle.b[1] + idle.b[2]}%, газ ${gas.b[0] + gas.b[1] + gas.b[2]}%`;
-window.__res = { idle, gas }; window.__done = true;
+  `${car.name}\nхолостий: ${fmt(idle)}\nскидання 3000: ${fmt(over)}\nгаз 4500: ${fmt(gas)}\n` +
+  `низи <180 Гц: холостий ${low(idle)}%, скидання ${low(over)}%, газ ${low(gas)}%`;
+window.__res = { idle, gas, over }; window.__done = true;
 </script></body></html>

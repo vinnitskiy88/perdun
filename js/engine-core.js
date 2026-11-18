@@ -214,6 +214,11 @@ export class EngineSynth {
     this.heat = 0;        // нагрів вихлопу після активної їзди (0..1) — паливо для пострілів
     this.burst = 0;       // скільки ще спалахів триває поточна серія пострілів
     this.lowCut = [new Biquad(), new Biquad()];
+    // Шар басу бурчання: низ 40–150 Гц з сигналу ДО зрізу низу, додається лише
+    // на холостих і при гальмуванні двигуном (на газу баланс не чіпає)
+    this.bassLP = [new Biquad(), new Biquad()];
+    this.bassHP = [new Biquad(), new Biquad()];
+    this.bassW = 0;
     this.crank = 0;
     this.crackleUser = 1;
     this.e = null;
@@ -222,9 +227,11 @@ export class EngineSynth {
   setCar(e) {
     // Значення за замовчуванням для полів, яких може не бути в профілі
     e = Object.assign({ idleStrength: 0.35, overrunStrength: 0.6, crankStrength: 1.1, lowCut: 130,
-      popGain: 1, burble: 0 }, e);
+      popGain: 1, burble: 0, burbleBass: 0 }, e);
     this.e = e;
     for (const f of this.lowCut) f.highpass(e.lowCut, 0.7, this.sr);
+    for (const f of this.bassLP) f.lowpass(150, 0.7, this.sr);
+    for (const f of this.bassHP) f.highpass(40, 0.7, this.sr);
     this.cyl = e.cylinders.map(c => ({ ang: (c.ang % 720) / 720, bank: c.bank, gain: c.gain }));
     this.nCyl = this.cyl.length;
     for (let b = 0; b < 2; b++) {
@@ -306,6 +313,13 @@ export class EngineSynth {
     const boost = smoothstep((this.loadS - 0.35) / 0.45);
     const whineAmp = e.whine * (0.15 + 0.85 * boost) * rpmNorm * rpmNorm;
 
+    // Вага шару басу: холостий (оберти біля холостих і малий газ) або гальмування двигуном
+    const idleness = clamp(1 - (this.rpmS - e.idle) / 1200, 0, 1) * (1 - this.loadS);
+    // на холостих — помірніше, ніж на скиданні: щоб бурчання лишалось «бульк», а не гул
+    const bassTarget = e.burbleBass * Math.max(0.7 * idleness, this.ovS);
+    this.bassW += (bassTarget - this.bassW) * (1 - Math.exp(-blockT / 0.15));
+    const bw = this.bassW;
+
     for (let i = 0; i < n; i++) {
       this.rpmS += (rpmT - this.rpmS) * kR;
       this.loadS += (loadT - this.loadS) * kL;
@@ -356,7 +370,11 @@ export class EngineSynth {
 
       // DC-фільтр (~25 Гц) + насичення
       // Зріз низу (2-й порядок, ~90 Гц): прибирає «гудіння» і постійну складову
-      const hl = this.lowCut[0].run(l), hr = this.lowCut[1].run(r);
+      let hl = this.lowCut[0].run(l), hr = this.lowCut[1].run(r);
+      if (e.burbleBass > 0) {   // фільтри працюють безперервно — без клацань при вмиканні
+        hl += this.bassHP[0].run(this.bassLP[0].run(l)) * bw;
+        hr += this.bassHP[1].run(this.bassLP[1].run(r)) * bw;
+      }
       let oL = Math.tanh(hl * e.drive) * e.gain, oR = Math.tanh(hr * e.drive) * e.gain;
 
       // Свист нагнітача: з моторного відсіку, повз вихлоп і насичення
