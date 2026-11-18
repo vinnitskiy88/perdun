@@ -214,6 +214,7 @@ export class EngineSynth {
     this.heat = 0;        // нагрів вихлопу після активної їзди (0..1) — паливо для пострілів
     this.burst = 0;       // скільки ще спалахів триває поточна серія пострілів
     this.lowCut = [new Biquad(), new Biquad()];
+    this.lowCut2 = [new Biquad(), new Biquad()];   // необов'язковий другий каскад (крутіший зріз)
     // Шар басу бурчання: низ 40–150 Гц з сигналу ДО зрізу низу, додається лише
     // на холостих і при гальмуванні двигуном (на газу баланс не чіпає)
     this.bassLP = [new Biquad(), new Biquad()];
@@ -227,9 +228,10 @@ export class EngineSynth {
   setCar(e) {
     // Значення за замовчуванням для полів, яких може не бути в профілі
     e = Object.assign({ idleStrength: 0.35, overrunStrength: 0.6, crankStrength: 1.1, lowCut: 130,
-      popGain: 1, burble: 0, burbleBass: 0 }, e);
+      popGain: 1, burble: 0, burbleBass: 0, lowCut2: 0 }, e);
     this.e = e;
     for (const f of this.lowCut) f.highpass(e.lowCut, 0.7, this.sr);
+    if (e.lowCut2 > 0) for (const f of this.lowCut2) f.highpass(e.lowCut2, 0.7, this.sr);
     for (const f of this.bassLP) f.lowpass(150, 0.7, this.sr);
     for (const f of this.bassHP) f.highpass(40, 0.7, this.sr);
     this.cyl = e.cylinders.map(c => ({ ang: (c.ang % 720) / 720, bank: c.bank, gain: c.gain }));
@@ -371,6 +373,7 @@ export class EngineSynth {
       // DC-фільтр (~25 Гц) + насичення
       // Зріз низу (2-й порядок, ~90 Гц): прибирає «гудіння» і постійну складову
       let hl = this.lowCut[0].run(l), hr = this.lowCut[1].run(r);
+      if (e.lowCut2 > 0) { hl = this.lowCut2[0].run(hl); hr = this.lowCut2[1].run(hr); }
       if (e.burbleBass > 0) {   // фільтри працюють безперервно — без клацань при вмиканні
         hl += this.bassHP[0].run(this.bassLP[0].run(l)) * bw;
         hr += this.bassHP[1].run(this.bassLP[1].run(r)) * bw;
