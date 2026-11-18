@@ -21,15 +21,16 @@ export const CARS = [
       banks: 2,
       // порядок 1-5-4-8-6-3-7-2 (циліндри 1–4 — правий ряд, 5–8 — лівий):
       // ряди П Л П Л Л П Л П — нерівномірні імпульси на ряд, «бурчання» V8
-      cylinders: cylinders(90, [0, 1, 0, 1, 1, 0, 1, 0], [1, 0.96, 1.03, 0.98, 1.02, 0.97, 1.04, 0.99]),
+      // більший розкид сили між циліндрами — більше субгармонік, «бурчання» в басу
+      cylinders: cylinders(90, [0, 1, 0, 1, 1, 0, 1, 0], [1, 0.9, 1.07, 0.95, 1.05, 0.92, 1.08, 0.97]),
       idle: 650, limiter: 6500, launch: 2400, peakRpm: 6000,
-      // довгий вихлоп великого позашляховика, турбіни приглушують верх
-      pipe: [3.0, 3.5], pipeFb: -0.4, pipeDamp: 0.45,
-      formants: [{ f: 150, q: 1.1, g: 0.75 }, { f: 460, q: 1.8, g: 0.35 }],
-      dry: 0.5, muffler: 1500, intake: 0.4, intakeF: 2200,
+      // довгий вихлоп великого позашляховика, турбіни приглушують верх — глибокий бас
+      pipe: [4.0, 4.6], pipeFb: -0.45, pipeDamp: 0.4,
+      formants: [{ f: 105, q: 1.0, g: 0.9 }, { f: 300, q: 1.6, g: 0.4 }],
+      dry: 0.45, muffler: 950, intake: 0.25, intakeF: 1800,
       // AMG Performance exhaust: виразні постріли на скиданні; легкий свист турбін під наддувом
-      rasp: 0.4, lope: 0.2, crackle: 0.7, whine: 0.07, whineRatio: 30,
-      idleStrength: 0.45, overrunStrength: 0.75, lowCut: 110,
+      rasp: 0.25, lope: 0.25, crackle: 0.7, whine: 0.05, whineRatio: 30,
+      idleStrength: 0.45, overrunStrength: 0.75, lowCut: 55,
       pulseWidth: 0.5, drive: 1.7, gain: 0.55,
     },
     vehicle: {

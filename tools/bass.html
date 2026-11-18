@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="uk"><head><meta charset="utf-8"><title>Пердун — спектр профілю</title>
+<style>body{background:#111;color:#ddd;font:14px monospace;padding:16px}</style></head>
+<body><pre id="out">…</pre>
+<script type="module">
+// Спектр машини (?car=id) на холостому та на газу: частка енергії по смугах і центр спектру.
+for (const f of ['cars.js', 'vehicle.js', 'engine-core.js']) await fetch('../js/' + f, { cache: 'reload' });
+const { CARS } = await import('../js/cars.js');
+const { EngineSynth } = await import('../js/engine-core.js');
+const id = new URLSearchParams(location.search).get('car') || 'amg-g63';
+const car = CARS.find((c) => c.id === id);
+const SR = 48000, N = 4096;
+const bands = [40, 63, 125, 250, 500, 1000, 2000, 4000];
+
+function spectrum(rpm, load) {
+  const s = new EngineSynth(SR); s.setCar(car.engine);
+  const L = new Float32Array(128), R = new Float32Array(128), buf = [];
+  for (let b = 0; b < 3 * SR / 128; b++) {
+    s.render(L, R, 128, { rpm, load, overrun: 0, cut: 0, crank: 0 });
+    // ?ch=L — лише лівий канал (так його чує один динамік), інакше середнє L+R
+    const ch = new URLSearchParams(location.search).get('ch');
+    if (b > SR / 128) for (let i = 0; i < 128; i++) buf.push(ch === 'L' ? L[i] : (L[i] + R[i]) / 2);
+  }
+  const pw = new Float64Array(N / 2);
+  let frames = 0;
+  for (let o = 0; o + N <= buf.length; o += N / 2, frames++) {
+    for (let k = 1; k < N / 2; k++) {        // повільний DFT по потрібних біннах (достатньо для тесту)
+      if (k % 2) continue;
+      let re = 0, im = 0;
+      for (let n = 0; n < N; n += 2) {
+        const w = 0.5 - 0.5 * Math.cos(2 * Math.PI * n / N), x = buf[o + n] * w, a = 2 * Math.PI * k * n / N;
+        re += x * Math.cos(a); im -= x * Math.sin(a);
+      }
+      pw[k] += re * re + im * im;
+    }
+    if (frames >= 3) break;
+  }
+  let num = 0, den = 0; const e = bands.map(() => 0);
+  for (let k = 2; k < N / 2; k += 2) {
+    const f = k * SR / N; if (f > 8000) break;
+    num += pw[k] * f; den += pw[k];
+    bands.forEach((fc, j) => { if (f >= fc / Math.SQRT2 && f < fc * Math.SQRT2) e[j] += pw[k]; });
+  }
+  const tot = e.reduce((a, b) => a + b, 0);
+  return { cen: Math.round(num / den), b: e.map((v) => Math.round(100 * v / tot)) };
+}
+
+const idle = spectrum(car.engine.idle, 0.2), gas = spectrum(4500, 1);
+const fmt = (r) => `центр ${r.cen} Гц | частка енергії %: ` + bands.map((f, i) => `${f}:${r.b[i]}`).join(' ');
+document.getElementById('out').textContent =
+  `${car.name}\nхолостий: ${fmt(idle)}\nгаз 4500: ${fmt(gas)}\nнизи <180 Гц: холостий ${idle.b[0] + idle.b[1] + idle.b[2]}%, газ ${gas.b[0] + gas.b[1] + gas.b[2]}%`;
+window.__res = { idle, gas }; window.__done = true;
+</script></body></html>
