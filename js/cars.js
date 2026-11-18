@@ -11,33 +11,6 @@ function cylinders(step, banks, gains) {
 
 export const CARS = [
   {
-    // Справжні дані: M177 4.0 л V8 бітурбо (турбіни в розвалі), хрестоподібний вал;
-    // 430 кВт / 850 Нм; 9G-TRONIC 5.35…0.60, головна пара 3.45; ~2640 кг;
-    // шини 275/50 R20; швидкість обмежена ~220 км/год.
-    id: 'amg-g63',
-    name: 'Mercedes-AMG G 63',
-    tagline: '4.0 л V8 бітурбо · 6 500 об/хв · 9-ст. автомат',
-    engine: {
-      banks: 2,
-      // порядок 1-5-4-8-6-3-7-2 (циліндри 1–4 — правий ряд, 5–8 — лівий):
-      // ряди П Л П Л Л П Л П — нерівномірні імпульси на ряд, «бурчання» V8
-      cylinders: cylinders(90, [0, 1, 0, 1, 1, 0, 1, 0], [1, 0.96, 1.03, 0.98, 1.02, 0.97, 1.04, 0.99]),
-      idle: 650, limiter: 6500, launch: 2400, peakRpm: 6000,
-      // довгий вихлоп великого позашляховика, турбіни приглушують верх
-      pipe: [3.0, 3.5], pipeFb: -0.4, pipeDamp: 0.45,
-      formants: [{ f: 150, q: 1.1, g: 0.75 }, { f: 460, q: 1.8, g: 0.35 }],
-      dry: 0.5, muffler: 1500, intake: 0.4, intakeF: 2200,
-      // AMG Performance exhaust: виразні постріли на скиданні; легкий свист турбін під наддувом
-      rasp: 0.4, lope: 0.2, crackle: 0.7, whine: 0.07, whineRatio: 30,
-      idleStrength: 0.45, overrunStrength: 0.75, lowCut: 110,
-      pulseWidth: 0.5, drive: 1.7, gain: 0.55,
-    },
-    vehicle: {
-      mass: 2640, peakKw: 430, cdA: 1.85, tireCirc: 2.46, maxKmh: 220, grip: 0.72,
-      ratios: [5.35, 3.24, 2.25, 1.64, 1.21, 1.0, 0.86, 0.72, 0.6], final: 3.45,
-    },
-  },
-  {
     id: 'v8-muscle',
     name: 'V8 Muscle',
     tagline: 'Хрестоподібний V8 · 6.2 л · рваний холостий хід',
