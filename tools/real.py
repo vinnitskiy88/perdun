@@ -131,8 +131,56 @@ def cmd_compare(ref, per):
     print(f'середня розбіжність: {np.mean(errs):.1f} дБ')
 
 
+ORDERS = [o / 2 for o in range(1, 33)]          # 0.5 … 16.0
+
+
+def order_profile(x, sr, t, rpm, conf, ph=None, phase=None):
+    """Рівень кожного порядку (дБ відносно порядку 4) за кривою обертів."""
+    nfft = 8192
+    win = np.hanning(nfft)
+    df = sr / nfft
+    acc = np.zeros(len(ORDERS)); n = 0
+    for i in range(0, len(t), 5):                   # кожні 100 мс
+        if rpm[i] < 900 or conf[i] < 1.5 or (phase is not None and ph[i] != phase):
+            continue
+        c = int(t[i] * sr)
+        fr = x[c - nfft // 2:c + nfft // 2]
+        if len(fr) != nfft:
+            continue
+        m = np.abs(np.fft.rfft(fr * win)) ** 2
+        for k, o in enumerate(ORDERS):
+            b = int(round(rpm[i] / 60 * o / df))
+            if 1 <= b < len(m) - 1:
+                acc[k] += m[b - 1:b + 2].max()
+        n += 1
+    if n == 0:
+        return None
+    acc /= n
+    ref = acc[ORDERS.index(4.0)]
+    return [10 * np.log10(v / ref + 1e-12) for v in acc], n
+
+
+def cmd_orders(ref, per):
+    tr = json.load(open(os.path.join(OUT, 'real.track.json'), encoding='utf-8'))
+    t = np.array(tr['t']); r = np.array(tr['rpm']); cf = np.array(tr['conf']); ph = np.array(tr['phase'])
+    sr1, x1, _ = load(ref); x1 = x1[int(tr['from'] * sr1):]
+    sr2, x2, _ = load(per)
+    for phase in (None, 'розгін', 'скидання'):
+        a = order_profile(x1, sr1, t, r, cf, ph, phase)
+        b = order_profile(x2, sr2, t, r, cf, ph, phase)
+        if not a or not b:
+            continue
+        print(f'\n== {"усі фази" if phase is None else phase} (кадрів {a[1]}) — дБ відносно порядку 4 ==')
+        print('порядок   ' + ' '.join(f'{o:>5g}' for o in ORDERS))
+        print('справжній ' + ' '.join(f'{v:>5.0f}' for v in a[0]))
+        print('Пердун    ' + ' '.join(f'{v:>5.0f}' for v in b[0]))
+        print('різниця   ' + ' '.join(f'{q - p:>+5.0f}' for p, q in zip(a[0], b[0])))
+
+
 if __name__ == '__main__':
-    if sys.argv[1] == 'track':
+    if sys.argv[1] == 'orders':
+        cmd_orders(sys.argv[2], sys.argv[3])
+    elif sys.argv[1] == 'track':
         cmd_track(sys.argv[2], int(sys.argv[3]), float(sys.argv[4]), float(sys.argv[5]))
     else:
         cmd_compare(sys.argv[2], sys.argv[3])
