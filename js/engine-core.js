@@ -221,7 +221,8 @@ export class EngineSynth {
 
   setCar(e) {
     // Значення за замовчуванням для полів, яких може не бути в профілі
-    e = Object.assign({ idleStrength: 0.35, overrunStrength: 0.6, crankStrength: 1.1, lowCut: 130 }, e);
+    e = Object.assign({ idleStrength: 0.35, overrunStrength: 0.6, crankStrength: 1.1, lowCut: 130,
+      popGain: 1, burble: 0 }, e);
     this.e = e;
     for (const f of this.lowCut) f.highpass(e.lowCut, 0.7, this.sr);
     this.cyl = e.cylinders.map(c => ({ ang: (c.ang % 720) / 720, bank: c.bank, gain: c.gain }));
@@ -246,6 +247,11 @@ export class EngineSynth {
     strength += (e.overrunStrength - strength) * overrun;
     if (this.crank > 0.5) strength = e.crankStrength;   // такти під стартером добре чутно
     let jit = 1 + (rand() - 0.5) * 2 * (0.05 + e.lope * 0.35 * idleF);
+    // «Бурчання» на скиданні (AMG-стиль): рвані, нерівні спалахи, частина майже пропадає
+    if (e.burble > 0 && overrun > 0.3) {
+      jit *= 1 + (rand() - 0.5) * 1.6 * e.burble * overrun;
+      if (rand() < 0.15 * e.burble * overrun) jit *= 0.2;
+    }
     if (rand() < e.lope * 0.05 * idleF * this.crackleUser) jit *= 0.35; // «рваний» холостий хід
     const amp = strength * c.gain * jit;
     const nAmp = amp * e.rasp * (0.15 + 0.85 * load);   // на малому газу майже без шипіння
@@ -260,7 +266,7 @@ export class EngineSynth {
       if (this.burst > 0 && overrun + cut > 0.3) p = Math.max(p, base * 0.5);
       if (rand() < p) {
         if (this.burst > 0) this.burst--; else this.burst = (rand() * 4) | 0;
-        const pa = (0.7 + rand() * rand() * 1.3) * (0.5 + 0.5 * this.heat);
+        const pa = (0.7 + rand() * rand() * 1.3) * (0.5 + 0.5 * this.heat) * e.popGain;
         this.pops[c.bank].trigger(pa);
         this.popWait = this.burst > 0 ? 0.2 + rand() * 0.25 : 0.4 + rand() * 0.5;
       }

@@ -25,13 +25,16 @@ export const CARS = [
       cylinders: cylinders(90, [0, 1, 0, 1, 1, 0, 1, 0], [1, 0.9, 1.07, 0.95, 1.05, 0.92, 1.08, 0.97]),
       idle: 650, limiter: 6500, launch: 2400, peakRpm: 6000,
       // довгий вихлоп великого позашляховика, турбіни приглушують верх — глибокий бас
-      pipe: [4.0, 4.6], pipeFb: -0.45, pipeDamp: 0.4,
-      formants: [{ f: 105, q: 1.0, g: 0.9 }, { f: 300, q: 1.6, g: 0.4 }],
-      dry: 0.45, muffler: 950, intake: 0.25, intakeF: 1800,
-      // AMG Performance exhaust: виразні постріли на скиданні; легкий свист турбін під наддувом
-      rasp: 0.25, lope: 0.25, crackle: 0.7, whine: 0.05, whineRatio: 30,
-      idleStrength: 0.45, overrunStrength: 0.75, lowCut: 55,
-      pulseWidth: 0.5, drive: 1.7, gain: 0.55,
+      // Підігнано під запис справжнього G 63 (Akrapovič): щільний бас 125–250 Гц,
+      // помітна хрипкість 1–4 кГц, рване бурчання й постріли на скиданні.
+      pipe: [3.4, 3.9], pipeFb: -0.3, pipeDamp: 0.4,
+      formants: [{ f: 140, q: 1.0, g: 0.85 }, { f: 420, q: 1.4, g: 0.3 }],
+      dry: 0.5, muffler: 5500, intake: 1.2, intakeF: 3000,
+      rasp: 0.5, lope: 0.25, crackle: 1.0, whine: 0.05, whineRatio: 30,
+      idleStrength: 0.45, overrunStrength: 0.75, lowCut: 150,
+      popGain: 1.8, burble: 0.8,
+      // вузькі, різкі імпульси тиску — більше «хрипу» 1–4 кГц навіть на низьких обертах
+      pulseWidth: 0.18, drive: 1.7, gain: 0.55,
     },
     vehicle: {
       mass: 2640, peakKw: 430, cdA: 1.85, tireCirc: 2.46, maxKmh: 220, grip: 0.72,

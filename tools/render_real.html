@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="uk"><head><meta charset="utf-8"><title>Пердун — рендер за записом справжньої машини</title>
+<style>body{background:#111;color:#ddd;font:14px monospace;padding:16px}</style></head>
+<body><pre id="out">…</pre>
+<script type="module">
+// Рендер профілю (?car=id) за кривою обертів і фазами з tools/out/real.track.json
+// → tools/out/<car>-real-perdun.wav (та сама обробка, що в застосунку).
+for (const f of ['cars.js', 'engine-core.js', 'engine-worklet.js']) await fetch('../js/' + f, { cache: 'reload' });
+const { CARS } = await import('../js/cars.js');
+const id = new URLSearchParams(location.search).get('car') || 'amg-g63';
+const car = CARS.find((c) => c.id === id), e = car.engine;
+const tr = await fetch('out/real.track.json', { cache: 'reload' }).then((r) => r.json());
+const SR = 48000, DT = 0.02, dur = tr.t[tr.t.length - 1] + 0.2;
+const LOAD = { 'розгін': 0.85, 'рівно': 0.3, 'холостий': 0.2, 'скидання': 0 };
+
+const ctx = new OfflineAudioContext(2, Math.ceil(SR * dur), SR);
+await ctx.audioWorklet.addModule('../js/engine-worklet.js');
+const node = new AudioWorkletNode(ctx, 'engine-processor', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
+node.port.postMessage({ type: 'car', engine: e });
+const comp = ctx.createDynamicsCompressor();
+comp.threshold.value = -12; comp.knee.value = 8; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.2;
+const master = ctx.createGain(); master.gain.value = 0.8;
+node.connect(comp).connect(master).connect(ctx.destination);
+const P = ['rpm', 'load', 'overrun', 'cut', 'crank'].map((k) => node.parameters.get(k));
+for (let i = 0; i < tr.t.length; i++) {
+  const t = tr.t[i], rpm = tr.rpm[i], ph = tr.phase[i];
+  const ov = ph === 'скидання' && rpm > e.idle * 1.35 ? 1 : 0;
+  [rpm, LOAD[ph] ?? 0.3, ov, 0, 0].forEach((v, k) => P[k].setValueAtTime(v, t));
+}
+await new Promise((r) => setTimeout(r, 50));
+const buf = await ctx.startRendering();
+const n = buf.length, data = new DataView(new ArrayBuffer(44 + n * 4));
+const w = (o, s) => [...s].forEach((c, i) => data.setUint8(o + i, c.charCodeAt(0)));
+w(0, 'RIFF'); data.setUint32(4, 36 + n * 4, true); w(8, 'WAVE'); w(12, 'fmt ');
+data.setUint32(16, 16, true); data.setUint16(20, 1, true); data.setUint16(22, 2, true);
+data.setUint32(24, SR, true); data.setUint32(28, SR * 4, true); data.setUint16(32, 4, true);
+data.setUint16(34, 16, true); w(36, 'data'); data.setUint32(40, n * 4, true);
+const L = buf.getChannelData(0), R = buf.getChannelData(1);
+for (let i = 0, o = 44; i < n; i++) for (const ch of [L, R]) {
+  const v = Math.max(-1, Math.min(1, ch[i])); data.setInt16(o, v < 0 ? v * 32768 : v * 32767, true); o += 2;
+}
+await fetch(`/save?name=${id}-real-perdun.wav`, { method: 'POST', body: data.buffer });
+document.getElementById('out').textContent = `${car.name}: ${dur.toFixed(1)} с → збережено ${id}-real-perdun.wav`;
+window.__done = true;
+</script></body></html>
